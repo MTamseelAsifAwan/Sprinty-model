@@ -54,7 +54,7 @@ else:
     early_stopping = EarlyStopping(monitor='val_loss', patience=5)
     X_train_reshaped = X_train.reshape((X_train.shape[0], X_train.shape[1], 1))
     X_test_reshaped = X_test.reshape((X_test.shape[0], X_test.shape[1], 1))
-    model.fit(X_train_reshaped, y_train, epochs=20, batch_size=64, validation_data=(X_test_reshaped, y_test), callbacks=[early_stopping])
+    model.fit(X_train_reshaped, y_train, epochs=20, batch_size=16, validation_data=(X_test_reshaped, y_test), callbacks=[early_stopping])
     model.save(model_path)
 
 # Helper Functions for LSTM Prediction
@@ -173,5 +173,6 @@ def test_prediction():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-if __name__ == "__main__":
-    app.run(debug=False, host="0.0.0.0")
+if __name__ == '__main__':
+    from waitress import serve
+    serve(app, host='0.0.0.0', port=8080)
