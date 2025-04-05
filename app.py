@@ -127,6 +127,10 @@ def predict_with_gemini(task_name, priority, labels, created_date):
         print(f"Error during Gemini API call: {e}")
         return None, None
 # Flask Routes
+@app.route('/', methods=['GET'])
+def home():
+    return jsonify({"message": "Welcome to the Task Duration Prediction API using LSTM and Gemini!"}), 200
+
 @app.route('/train', methods=['POST'])
 def train_model():
     try:
