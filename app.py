@@ -8,6 +8,12 @@ from datetime import datetime, timedelta
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 from google.generativeai import configure, GenerativeModel
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+import pandas as pd
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
+from tensorflow.keras.callbacks import EarlyStopping
 
 app = Flask(__name__)
 
@@ -16,11 +22,53 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 configure(api_key=GEMINI_API_KEY)
 model_gemini = GenerativeModel('gemini-2.0-flash')
 
-# Load saved model and scaler
+# Paths
 MODEL_PATH = "lstm_task_duration_model.h5"
 SCALER_PATH = "scaler.pkl"
 COLUMNS_PATH = "columns.pkl"
 
+# Train route (for local/dev only)
+@app.route("/train", methods=["POST"])
+def train():
+    try:
+        data = pd.read_csv('Book1data.csv', encoding='latin1')
+        data['Created '] = pd.to_datetime(data['Created'])
+        data['Resolved'] = pd.to_datetime(data['Resolved'])
+        data['Duration'] = (data['Resolved'] - data['Created ']).dt.days
+        data = data.drop(['Resolved'], axis=1)
+        data = pd.get_dummies(data, drop_first=True)
+
+        X = data.drop(['Duration', 'Created '], axis=1)
+        y = data['Duration']
+        columns = X.columns
+
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+
+        X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+        X_train_reshaped = X_train.reshape((X_train.shape[0], 1, X_train.shape[1]))
+        X_test_reshaped = X_test.reshape((X_test.shape[0], 1, X_test.shape[1]))
+
+        model = Sequential([
+            LSTM(64, input_shape=(X_train_reshaped.shape[1], X_train_reshaped.shape[2]), activation='relu'),
+            Dense(32, activation='relu'),
+            Dense(1)
+        ])
+        model.compile(optimizer='adam', loss='mean_squared_error')
+        early_stopping = EarlyStopping(monitor='val_loss', patience=5)
+        model.fit(X_train_reshaped, y_train, epochs=20, batch_size=64, validation_data=(X_test_reshaped, y_test), callbacks=[early_stopping])
+
+        model.save(MODEL_PATH)
+        with open(SCALER_PATH, 'wb') as f:
+            pickle.dump(scaler, f)
+        with open(COLUMNS_PATH, 'wb') as f:
+            pickle.dump(columns, f)
+
+        return jsonify({"message": "Model trained and saved successfully."})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Load model and scaler
 model = load_model(MODEL_PATH)
 with open(SCALER_PATH, 'rb') as f:
     scaler = pickle.load(f)
